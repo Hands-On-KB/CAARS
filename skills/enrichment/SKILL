@@ -1,0 +1,47 @@
+---
+name: enrichment
+description: "Use this skill when looking up malware family names, Windows API calls, Windows kernel structure names, or Linux shared-object/kernel-module names surfaced by sandbox or infrastructure collectors, and producing a cited plain-language annotation for each (or an explicit 'no reference found' result). Triggers include: 'enrich these findings', 'look up [term] for the report', 'what does [API call / structure / module] do', or 'add reference context to the sandbox findings'. Do NOT use this for indicator lookups against AbuseIPDB/VirusTotal/Shodan/etc. — see cti-collector-builder for those; this skill only handles the five reference/documentation sources, which are queried by term, not by indicator, and never produce a verdict."
+---
+
+# CAARS enrichment
+
+Implements the enrichment agent from the CAARS architecture: takes the distinct malware-family names, Windows API calls, Windows kernel structure names, and Linux `.so`/`.ko` names that sandbox and infrastructure collectors extracted, and attaches a short, cited, plain-language explanation to each. Read `../../CLAUDE.md` first for the Enrichment Record schema and the official-vs-community citation rule — this skill's whole point is making that distinction correctly.
+
+**This step never produces a verdict.** It explains what a term is or does. A legitimate, well-documented Windows API showing up in a trace is not "less suspicious" because it resolved to Microsoft's docs, and an unresolved term is not "more suspicious" because nothing came up — enrichment output is context to sit next to the sandbox/infra finding that made the term worth explaining, decided by deconfliction and framed in the report, not decided here.
+
+## Source routing — pick the right one per term type
+
+| Term type | Primary source | Fallback | Notes |
+|---|---|---|---|
+| Malware family name/alias | Malpedia (public JSON API, no key required) | — | Family profile, aliases, associated actors/campaigns |
+| Windows API call, documented (Win32/COM) | Microsoft Learn official docs | — | No general public lookup-by-name API exists; use a curated local reference table of offense-relevant APIs (process injection, credential access, persistence primitives) refreshed periodically, or a scoped search against learn.microsoft.com with the same citation discipline as everything else |
+| Windows API call, undocumented (`Nt*`/`Zw*` native API) | ntdoc.m417z.com | — | Tag `community, unofficial` — this is exactly the surface Microsoft doesn't publish, which is *why* malware uses it for evasion |
+| Windows kernel structure (`_EPROCESS`, `_ETHREAD`, `_KTHREAD`, etc.) | Vergilius Project | — | **Version-specific.** Must be queried with the target OS build; the resulting annotation must record which build it applies to. Never cite a structure layout against a different build than the one observed |
+| Linux shared object (`.so`) | man pages (man7.org or local man-db) / package metadata | — | Only resolves for known packages; custom/attacker-built `.so` names won't match |
+| Linux kernel module (`.ko`) | kernel.org / distro kernel documentation | — | Same caveat — attacker-authored rootkit modules are expected to not resolve |
+
+## Procedure
+
+1. **Deduplicate terms across the whole investigation before looking anything up** — the same API call or family name often appears in multiple sandbox findings; look it up once.
+2. **Route by `subject_type`** per the table above. For Windows API calls, try the documented path first; only fall back to ntdoc.m417z.com if Microsoft's docs don't cover it (that fallback itself is informative — note it).
+3. **For Vergilius lookups, always pass and record the OS build.** Cache key is `(structure_name, os_build)`, never `structure_name` alone — a `_KTHREAD` layout for Windows 10 22H2 and Windows 11 24H2 are different data, and serving the wrong one misleads an analyst about offsets that don't apply.
+4. **Write a short, plain-language `summary`** — one to three sentences, aimed at an analyst who knows security but not necessarily this specific API/structure/family. State what it is/does, not whether its presence is good or bad.
+5. **When nothing resolves, say so explicitly** in the output rather than dropping the term: `"no reference found"` is a valid and useful result. Note it's more likely for custom/newly-compiled artifacts and unusual `.so`/`.ko` names — that absence is itself informative to the analyst and should read that way in the report, not as a silent gap.
+6. **Tag every result's citation class correctly**: `official` for Malpedia, Microsoft Learn, and standard man pages/kernel docs; `community, unofficial` for Vergilius Project and ntdoc.m417z.com. Get this right — the report-writer skill relies on it to pick citation styling, and analysts weight community sources differently.
+
+## Caching
+
+- Cache aggressively and **globally across investigations**, not per-indicator — these lookups are keyed by a term that recurs across unrelated cases (the same API name, the same malware family) and documentation for it changes rarely.
+- Vergilius entries cache by `(structure_name, os_build)` as above.
+- A long TTL is appropriate here (weeks-to-months), unlike indicator records which should have short TTLs.
+
+## Output shape (Enrichment Record — consumed by cti-report-writer)
+
+`subject`, `subject_type`, `source`, `summary`, `evidence_url`, `version_context` (blank if not version-specific), `retrieved_at`. No confidence or verdict field — if you find yourself wanting to add one, that's a sign the lookup has drifted into making a judgment call it shouldn't.
+
+## Verification before handing off
+
+- Confirm every Vergilius result carries a non-blank `version_context` matching the OS build actually observed for that indicator — not just "the build we happened to have cached."
+- Confirm every ntdoc.m417z.com and Vergilius result is tagged `community`/`unofficial`, not `official`.
+- Confirm at least one deliberately-obscure/made-up term produces a clean "no reference found" result rather than a hallucinated summary.
+- Spot-check one Windows API summary and one malware-family summary against the actual source page — enrichment summaries are the easiest place for confident-sounding but wrong paraphrasing to slip in.
