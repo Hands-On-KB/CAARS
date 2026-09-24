@@ -1,0 +1,52 @@
+---
+name: collector-builder
+description: "Use this skill when building or modifying a CAARS collector sub-agent and its MCP server wrapper for a threat-intel indicator source (e.g. AbuseIPDB, VirusTotal, Any.Run/JoeSandbox/HybridAnalysis, Shodan/Censys, or a new source being added later). Triggers include: 'add a collector for [source]', 'wrap [API] as an MCP server', 'write the [source] collector', or 'normalize [source]'s response into the record schema'. Do NOT use this for the reference/enrichment sources (Malpedia, Microsoft docs, Vergilius, ntdoc.m417z.com, Linux docs) — see cti-enrichment for those, since they're queried by term rather than by indicator and use a different output schema."
+---
+
+# CAARS collector builder
+
+Builds one piece of the orchestrator → collector fan-out described in the CAARS architecture: a small MCP server wrapping one indicator-source API, plus the collector sub-agent logic that maps its responses into the shared Indicator Record schema. Read `../../CLAUDE.md` first for the full architecture and the Indicator Record field definitions — this skill assumes that schema rather than restating it in full.
+
+## Which family is this collector?
+
+| Family | Sources | Interaction model |
+|---|---|---|
+| Reputation / feed | AbuseIPDB, VirusTotal | Fast, cheap, read-only GET lookups |
+| Sandbox | Any.Run, JoeSandbox, HybridAnalysis | Existing-report lookup by default; submission is a separate, gated tool — see below |
+| Infrastructure scan | Shodan, Censys | Fast lookups; surfaces exposure/tech data, not a verdict |
+
+Identify the family before designing the tool surface — sandbox collectors need the submission gate; the other two families don't.
+
+## MCP server design
+
+- One MCP server per source (or tightly-related source family). Expose a small, fixed set of purpose-built tools — not a generic HTTP-fetch tool. This keeps the collector's tool surface auditable and means adding a ninth source later is additive, not a rewrite.
+- Example tool shapes from the implementation outline (adapt, don't feel bound to exact names):
+  - `abuseipdb.check(ip)`, `abuseipdb.report_history(ip)`
+  - `virustotal.lookup(indicator)`, `virustotal.related_objects(indicator)`
+  - `anyrun.get_existing_report(hash_or_url)`, `anyrun.submit_for_analysis(target)` — submission tool is separate and gated (see Guardrails)
+  - `shodan.host_lookup(ip)`, `shodan.cert_search(ip_or_domain)`
+- Store the source's API credential in a secrets manager, scoped so only this MCP server can read it. Never put it in agent config or a normalization script's source.
+- Rate limits and cost: cache responses per `(source, indicator)` with a TTL; for sandbox sources, always try the existing-report tool before considering submission; track quota usage centrally rather than per-collector so the team can see aggregate burn.
+
+## Collector sub-agent responsibilities
+
+The collector's job is "call the tool *and* translate the response into the schema" — not just proxy the raw API response.
+
+1. **Validate/normalize the indicator first**, at the orchestrator level if possible (collectors shouldn't each re-implement this): resolve indicator type, defang/refang consistently, and check private-IP/internal-allowlist ranges (RFC 1918, known internal domains) *before* any external call — a misrouted internal indicator hitting a public feed is a real leak, not a theoretical one.
+2. **Emit one record per discrete claim**, not one record per API call. A single VirusTotal response can produce a verdict record, several related-file records, and a community-comment record — split them.
+3. **Capture `evidence_url` on every record**, pointed at the specific page/entry that supports that exact claim (e.g. the file page, not just the IP page, for a related-file claim). This is the field the whole human-verifiability goal depends on — do not skip it to save a request.
+4. **Set `retrieved_at` per call**, not per run — if a collector makes multiple calls, timestamp each honestly.
+5. **Degrade gracefully on failure/timeout.** A collector that times out should return a partial-result-plus-failure-note, not throw and stall the orchestrator. The report should be able to say "Shodan did not respond within 30s" rather than silently omitting the section or blocking the whole run.
+6. **Least privilege.** A collector should only hold credentials/tools for its own source family — a sandbox collector has no Shodan access and vice versa. This also makes per-source call logging trivial, which Ops wants (see CLAUDE.md security considerations).
+
+## Sandbox collectors specifically
+
+- Default behavior is `get_existing_report` — check whether the indicator/hash/URL already has a report before considering anything else.
+- `submit_for_analysis` (fresh detonation) is a **separate tool the orchestrator only calls when the analyst has explicitly opted in for this run.** Live submission can tip off an attacker monitoring their own infrastructure and burns quota/time — it is never a default collector behavior. If you're building the collector and the orchestrator hasn't wired up that opt-in flag yet, flag it rather than defaulting to "submit if no report exists."
+
+## Verification before handing off
+
+- Confirm every emitted record has a non-empty `evidence_url` that resolves to the actual claim (not just the indicator's landing page when a more specific link exists).
+- Confirm a deliberately-malformed or empty API response produces a clean failure note, not an unhandled exception or a fabricated record.
+- Confirm a private/internal-range test indicator is rejected before any external call fires.
+- If this collector is new, add its tool names to the architecture table in `../../CLAUDE.md` so the project file stays accurate.
