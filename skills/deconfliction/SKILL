@@ -1,0 +1,43 @@
+---
+name: deconfliction
+description: "Use this skill when reconciling normalized Indicator Records from multiple CAARS collectors (reputation, sandbox, infrastructure) into a consensus verdict, confidence score, and explicit conflict list for one indicator. Triggers include: 'deconflict these findings', 'reconcile the collector output for [indicator]', 'compute a consensus verdict', or 'what's the confidence score for [indicator]'. This is a pure-reasoning step over already-normalized records — it does not call any external API and does not render the report (see cti-report-writer for that)."
+---
+
+# CAARS deconfliction
+
+Implements the deconfliction agent from the CAARS architecture: the step that turns several sources' independent, sometimes-contradictory observations into one defensible consensus, without quietly averaging away disagreement that an analyst needs to see. Read `../../CLAUDE.md` first for the Indicator Record schema this operates on.
+
+This is the step with no upstream API to lean on — it's the part most worth getting right, and the part where a wrong shortcut (e.g. simple majority vote, or blending everything into a mid-range score) actively hides information from the analyst.
+
+## Procedure
+
+1. **Group all records for the indicator by `claim_type`** (`verdict`, `malware_family`, `exposed_service`, `infrastructure`, `behavior`, `reputation_signal`). Deconfliction happens within a claim type, not across the whole record set at once — "is it malicious" and "what malware family" are separate questions that can each have their own agreement/disagreement pattern.
+2. **Weight each record by source reliability and recency.** Keep weights configurable (a lookup table, not inline magic numbers) since analysts will want to tune them per engagement. Starting point, adapt as needed:
+   - Vendor-confirmed multi-engine detections (VirusTotal AV consensus, sandbox-confirmed behavior) weight highest.
+   - Structured reputation feeds with a confidence score (AbuseIPDB abuse score) weight next.
+   - Unstructured community submissions (AbuseIPDB free-text comments, VirusTotal community comments) weight lowest — they're useful context, not strong signal on their own.
+   - Apply a recency decay: a detection/report from the last few days should outweigh a technically-still-valid one from 18 months ago, especially for fast-changing infrastructure like shared/reallocated hosting.
+3. **Compute a consensus verdict** — `malicious | suspicious | benign | unknown` — and a **confidence score (0–100)** per indicator, derived from the weighted verdict-type records. Document the arithmetic actually used (don't leave it implicit) so it's auditable later.
+4. **Explicitly list every unresolved conflict** rather than letting it disappear into the aggregate score. A conflict is any case where weighted sources materially disagree on a claim within the same `claim_type` — e.g. one source reports malicious activity the others don't corroborate at all, not just a minor confidence-score spread. For each conflict, output: the claim, which sources are on which side (with their `evidence_url`s), and a one-line note on what might explain the split (shared/reallocated hosting, stale data, differing scope of observation, etc.) — framed as a hypothesis for the analyst to check, not a resolution.
+5. **Where sources simply don't overlap** (e.g. Shodan has infrastructure data and AbuseIPDB has none — nothing to compare), that's not a conflict, it's just non-overlapping evidence. Don't manufacture a conflict entry for it.
+
+## Output shape (consumed by cti-report-writer)
+
+For each indicator, produce:
+
+- `consensus_verdict`: `malicious | suspicious | benign | unknown`
+- `consensus_confidence`: 0–100
+- `claims`: per `claim_type`, the reconciled statement plus the underlying records and their `evidence_url`s
+- `conflicts`: list of `{ claim_type, description, sources_for, sources_against, evidence_urls, note }` — empty list is a fine and common result, don't force one
+
+## Guardrails specific to this step
+
+- **Never silently blend a strong signal and a weak contradiction into a "medium" result** — if AbuseIPDB shows heavy abuse and VirusTotal shows zero detections, that's a listed conflict with both scores visible, not a averaged-down verdict.
+- **Community-sourced signals never outweigh vendor-verified ones** in the weighting scheme, by design (see CLAUDE.md security considerations) — if a change to the weights would let a single community comment override a multi-engine detection, that's a bug in the weights, not an edge case to accept.
+- This step produces no `evidence_url`-less claims of its own — everything here is a reconciliation of records that already carry their own citations. If reasoning needs to go beyond what the records support, that belongs in the report's AI-Inferred Synthesis section, not in deconfliction output.
+
+## Verification before handing off
+
+- Spot-check that the consensus verdict and confidence score are actually derivable from the weighted inputs given (re-run the arithmetic by hand on one example).
+- Confirm every listed conflict cites at least one record on each side.
+- Confirm no claim type with genuinely non-overlapping (not contradictory) source coverage was mislabeled as a conflict.
