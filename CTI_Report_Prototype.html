@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Threat Intelligence Report — [Target Entity Name]</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    color-scheme: light;
+    --paper:#F6F5F0;
+    --ink:#20242B;
+    --ink-soft:#565A62;
+    --ink-faint:#8A8D93;
+    --case:#232F3D;
+    --case-line:#3A4A5D;
+    --rule:#DAD6C9;
+    --rule-soft:#E7E3D7;
+    --red:#A6362C;
+    --red-tint:#F1DDD8;
+    --amber:#96691F;
+    --amber-tint:#F1E4C9;
+    --sage:#4C6B54;
+    --sage-tint:#DEE7DB;
+    --serif: 'Newsreader', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+    --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--serif);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;}
+
+  /* ---------- preview banner ---------- */
+  .preview-banner{
+    background:#E9E4D2;
+    border-bottom:1px solid var(--rule);
+    color:var(--ink-soft);
+    font-family:var(--mono);
+    font-size:12.5px;
+    letter-spacing:.01em;
+    text-align:center;
+    padding:.55rem 1rem;
+  }
+  .preview-banner strong{color:var(--ink);}
+
+  /* ---------- layout ---------- */
+  .report{
+    display:grid;
+    grid-template-columns: 300px 1fr;
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+  .spine{
+    position:sticky;
+    top:0;
+    align-self:start;
+    height:100vh;
+    overflow-y:auto;
+    background:var(--case);
+    color:#EDEFF2;
+    padding:2.2rem 1.7rem 2rem;
+  }
+  .doc{
+    padding: 2.4rem 3.2rem 4rem;
+    min-width:0;
+  }
+
+  /* ---------- spine contents ---------- */
+  .spine-kicker{
+    font-family:var(--mono);
+    font-size:11.5px;
+    color:#9AA6B4;
+    margin:0 0 .35rem;
+  }
+  .spine-title-row{
+    position:relative;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:.5rem;
+  }
+  .spine h1{
+    font-family:var(--serif);
+    font-weight:600;
+    font-size:1.55rem;
+    line-height:1.25;
+    margin:0 0 .2rem;
+    color:#fff;
+    flex:1 1 auto;
+    min-width:0;
+  }
+  .spine-target{
+    font-family:var(--mono);
+    font-size:1.02rem;
+    color:#D7DCE3;
+    margin:0 0 1.4rem;
+    word-break:break-all;
+  }
+
+  /* update / re-run control */
+  .update-widget{flex:0 0 auto; margin-top:.15rem;}
+  .update-widget summary{
+    list-style:none;
+    cursor:pointer;
+    font-family:var(--serif);
+    font-size:.8rem;
+    color:#EDEFF2;
+    background:transparent;
+    border:1px solid var(--case-line);
+    padding:.3rem .6rem;
+    white-space:nowrap;
+    user-select:none;
+  }
+  .update-widget summary::-webkit-details-marker{display:none;}
+  .update-widget summary:hover{border-color:#9AA6B4; background:rgba(255,255,255,.06);}
+  .update-widget[open] summary{background:rgba(255,255,255,.1); border-color:#9AA6B4;}
+  .update-panel{
+    position:absolute;
+    top:calc(100% + .5rem);
+    left:0;
+    right:0;
+    background:#1B242E;
+    border:1px solid var(--case-line);
+    padding:.9rem 1rem 1rem;
+    z-index:6;
+    box-shadow:0 10px 26px rgba(0,0,0,.4);
+  }
+  .update-panel p.panel-lede{
+    font-size:12.5px;
+    color:#C7CDD6;
+    margin:0 0 .7rem;
+    line-height:1.5;
+  }
+  ul.agent-check{
+    list-style:none;
+    margin:0 0 .85rem;
+    padding:0;
+  }
+  ul.agent-check li{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    gap:.6rem;
+    padding:.35rem 0;
+    border-bottom:1px solid var(--case-line);
+    font-size:12px;
+    color:#EDEFF2;
+  }
+  ul.agent-check li:last-child{border-bottom:none;}
+  ul.agent-check .status{
+    font-family:var(--mono);
+    font-size:10px;
+    text-align:right;
+    flex:0 0 auto;
+    max-width:9.5rem;
+  }
+  ul.agent-check li.run .status{color:#9FC2A6;}
+  ul.agent-check li.cond .status{color:#D8B979;}
+  ul.agent-check li.skip .status{color:#7C8AA0;}
+  .confirm-update{
+    width:100%;
+    font-family:var(--serif);
+    font-size:.85rem;
+    color:#182028;
+    background:#EDEFF2;
+    border:none;
+    padding:.55rem 0;
+    cursor:pointer;
+  }
+  .confirm-update:hover{background:#fff;}
+  .confirm-update:disabled{
+    background:transparent;
+    color:#9FC2A6;
+    border:1px solid #3E5647;
+    cursor:default;
+  }
+  .panel-note{
+    font-size:11px;
+    color:#9AA6B4;
+    margin:.6rem 0 0;
+    line-height:1.5;
+  }
+  .verdict-block{
+    background:var(--red);
+    padding:.85rem 1rem .95rem;
+    margin-bottom:1.4rem;
+  }
+  .verdict-label{
+    font-family:var(--serif);
+    font-weight:600;
+    font-size:1.15rem;
+    color:#fff;
+    margin:0 0 .5rem;
+  }
+  .conf-track{
+    height:6px;
+    background:rgba(255,255,255,.28);
+    border-radius:1px;
+    overflow:hidden;
+    margin-bottom:.4rem;
+  }
+  .conf-fill{
+    height:100%;
+    background:#fff;
+  }
+  .conf-label{
+    font-family:var(--mono);
+    font-size:12px;
+    color:#FBEAE7;
+  }
+  .spine dl.facts{
+    margin:0 0 1.5rem;
+    font-size:13.5px;
+  }
+  .spine dl.facts div{
+    display:flex;
+    justify-content:space-between;
+    gap:.75rem;
+    padding:.4rem 0;
+    border-bottom:1px solid var(--case-line);
+  }
+  .spine dl.facts dt{color:#9AA6B4;}
+  .spine dl.facts dd{
+    margin:0;
+    font-family:var(--mono);
+    font-size:12.5px;
+    color:#EDEFF2;
+    text-align:right;
+  }
+  .artifact-chips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:.4rem;
+    margin-bottom:1.6rem;
+  }
+  .artifact-chips a{
+    font-family:var(--mono);
+    font-size:11px;
+    color:#D7DCE3;
+    border:1px solid var(--case-line);
+    padding:.28rem .45rem;
+    text-decoration:none;
+    display:inline-block;
+  }
+  .artifact-chips a:hover{border-color:#9AA6B4;}
+  .spine nav{
+    border-top:1px solid var(--case-line);
+    padding-top:1.1rem;
+  }
+  .spine nav p.nav-label{
+    font-size:12px;
+    color:#9AA6B4;
+    margin:0 0 .6rem;
+  }
+  .spine nav ol{
+    list-style:none;
+    margin:0;
+    padding:0;
+    counter-reset:navsec;
+  }
+  .spine nav li{counter-increment:navsec;}
+  .spine nav a{
+    display:flex;
+    gap:.55rem;
+    padding:.34rem 0;
+    text-decoration:none;
+    font-size:13.5px;
+    color:#D7DCE3;
+    line-height:1.35;
+  }
+  .spine nav a:hover{color:#fff;}
+  .spine nav a::before{
+    content: counter(navsec);
+    font-family:var(--mono);
+    font-size:11.5px;
+    color:#7C8AA0;
+    flex:0 0 auto;
+    padding-top:.1rem;
+  }
+  .spine-foot{
+    margin-top:1.6rem;
+    padding-top:1rem;
+    border-top:1px solid var(--case-line);
+    font-size:11px;
+    color:#7C8AA0;
+    line-height:1.5;
+  }
+
+  /* ---------- doc typography ---------- */
+  .sec{
+    margin-bottom:2.6rem;
+    max-width:42rem;
+  }
+  .sec-head{
+    display:flex;
+    align-items:baseline;
+    gap:.65rem;
+    border-bottom:1px solid var(--rule);
+    padding-bottom:.5rem;
+    margin-bottom:1.1rem;
+  }
+  .sec-num{
+    font-family:var(--mono);
+    font-size:.85rem;
+    color:var(--ink-faint);
+  }
+  .sec-head h2{
+    font-family:var(--serif);
+    font-weight:600;
+    font-size:1.45rem;
+    margin:0;
+    color:var(--ink);
+  }
+  .sec h3{
+    font-family:var(--serif);
+    font-weight:600;
+    font-size:1.1rem;
+    margin:1.6rem 0 .6rem;
+  }
+  .sec p{margin:0 0 1rem;}
+  .sec p.lede{
+    font-size:1.06rem;
+  }
+  .muted{color:var(--ink-soft);}
+
+  .doc-title{
+    max-width:42rem;
+    margin-bottom:.4rem;
+  }
+  .doc-title .report-name{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--ink-faint);
+    margin:0 0 .5rem;
+  }
+  .doc-title h1{
+    font-family:var(--serif);
+    font-style:italic;
+    font-weight:500;
+    font-size:1.9rem;
+    margin:0 0 1.4rem;
+    color:var(--ink);
+  }
+
+  .update-note{
+    background:var(--amber-tint);
+    border-left:3px solid var(--amber);
+    padding:.85rem 1rem;
+    margin:0 0 1.6rem;
+    font-size:14.5px;
+    max-width:42rem;
+  }
+  .update-note strong{display:block; margin-bottom:.25rem; font-family:var(--serif); font-weight:600;}
+
+  .flag-box{
+    background:var(--red-tint);
+    border-left:3px solid var(--red);
+    padding:1rem 1.1rem;
+    max-width:42rem;
+  }
+  .flag-box p{margin:0;}
+  .flag-box p + p{margin-top:.7rem;}
+
+  .synth-box{
+    border:1px dashed var(--ink-faint);
+    padding:1rem 1.1rem;
+    max-width:42rem;
+    background:#FBFAF6;
+  }
+  .synth-tag{
+    display:inline-block;
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--ink-soft);
+    border:1px solid var(--ink-faint);
+    padding:.15rem .4rem;
+    margin-bottom:.6rem;
+  }
+
+  /* citations */
+  .cite{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width:1.15rem;
+    height:1.15rem;
+    padding:0 .2rem;
+    font-family:var(--mono);
+    font-size:10.5px;
+    text-decoration:none;
+    vertical-align:super;
+    line-height:1;
+    margin-left:.05rem;
+  }
+  .cite.official{background:var(--case); color:#fff;}
+  .cite.community{background:transparent; border:1px dashed var(--ink-soft); color:var(--ink);}
+  .no-ref{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--ink-faint);
+    border:1px dashed var(--rule);
+    padding:.1rem .35rem;
+    margin-left:.2rem;
+  }
+
+  /* data cards */
+  .card{
+    border:1px solid var(--rule);
+    padding:1rem 1.1rem;
+    margin-bottom:1.1rem;
+  }
+  .card-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    margin-bottom:.7rem;
+  }
+  .card-head h4{
+    font-family:var(--serif);
+    font-weight:600;
+    font-size:1.02rem;
+    margin:0;
+  }
+  .card-head .tag{
+    font-family:var(--mono);
+    font-size:10.5px;
+    padding:.15rem .4rem;
+  }
+  .tag.malicious{background:var(--red); color:#fff;}
+  .tag.context{background:var(--sage-tint); color:var(--sage);}
+  dl.kv{
+    margin:0;
+    display:grid;
+    grid-template-columns: 10rem 1fr;
+    row-gap:.4rem;
+    column-gap:.75rem;
+    font-size:14px;
+  }
+  dl.kv dt{color:var(--ink-soft);}
+  dl.kv dd{margin:0; font-family:var(--mono); font-size:13px;}
+
+  .hash-line{
+    font-family:var(--mono);
+    font-size:12.5px;
+    word-break:break-all;
+    background:#FBFAF6;
+    border:1px solid var(--rule-soft);
+    padding:.5rem .6rem;
+    margin:.3rem 0 .9rem;
+  }
+
+  ul.finding-list{
+    margin:0 0 1rem;
+    padding-left:1.1rem;
+  }
+  ul.finding-list li{margin-bottom:.55rem;}
+  code.tok{
+    font-family:var(--mono);
+    font-size:.92em;
+    background:#EFEBDD;
+    padding:.05rem .3rem;
+  }
+
+  table.deconf{
+    width:100%;
+    max-width:42rem;
+    border-collapse:collapse;
+    font-size:13.5px;
+    margin-bottom:.5rem;
+  }
+  table.deconf th, table.deconf td{
+    border:1px solid var(--rule);
+    padding:.55rem .6rem;
+    text-align:left;
+    vertical-align:top;
+  }
+  table.deconf th{
+    font-family:var(--serif);
+    font-weight:600;
+    background:#EFEBDD;
+    font-size:13px;
+  }
+  table.deconf td.consensus-conflict{background:var(--amber-tint);}
+  table.deconf td.consensus-agree{background:var(--sage-tint);}
+
+  .sources-group{margin-bottom:1.6rem;}
+  .sources-group h3{margin-top:0;}
+  ol.source-list{
+    list-style:none;
+    margin:0;
+    padding:0;
+  }
+  ol.source-list li{
+    display:grid;
+    grid-template-columns: 1.6rem 1fr;
+    gap:.6rem;
+    padding:.55rem 0;
+    border-bottom:1px solid var(--rule-soft);
+    font-size:13.5px;
+  }
+  ol.source-list .src-num{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--ink-faint);
+  }
+  ol.source-list .src-name{
+    font-family:var(--serif);
+    font-weight:600;
+  }
+  ol.source-list .src-tag{
+    font-family:var(--mono);
+    font-size:10px;
+    color:var(--ink-soft);
+    margin-left:.4rem;
+  }
+  ol.source-list .src-url{
+    display:block;
+    font-family:var(--mono);
+    font-size:12px;
+    word-break:break-all;
+    color:var(--ink-soft);
+    text-decoration:none;
+    margin-top:.15rem;
+  }
+  ol.source-list .src-url:hover{color:var(--ink);}
+  ol.source-list .src-meta{
+    font-size:11.5px;
+    color:var(--ink-faint);
+    margin-top:.2rem;
+  }
+
+  .legend{
+    display:flex;
+    gap:1.4rem;
+    flex-wrap:wrap;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin-bottom:1.4rem;
+  }
+  .legend span{display:inline-flex; align-items:center; gap:.4rem;}
+  .legend .swatch{
+    width:1.1rem; height:1.1rem;
+    display:inline-flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-size:9.5px;
+  }
+  .legend .swatch.official{background:var(--case); color:#fff;}
+  .legend .swatch.community{border:1px dashed var(--ink-soft);}
+
+  .provenance{
+    max-width:42rem;
+    border-top:1px solid var(--rule);
+    padding-top:1.2rem;
+    margin-top:1rem;
+    font-size:12px;
+    color:var(--ink-faint);
+    line-height:1.7;
+  }
+
+  @media (max-width: 860px){
+    .report{grid-template-columns: 1fr;}
+    .spine{position:static; height:auto;}
+    .doc{padding:2rem 1.3rem 3rem;}
+  }
+
+  @media print{
+    .preview-banner{display:none;}
+    .spine{position:static; height:auto;}
+    .report{grid-template-columns: 1fr; max-width:100%;}
+    body{background:#fff;}
+  }
+</style>
+</head>
+<body>
+
+<div class="preview-banner">Design preview — sample data for a fictional investigation. Target address <strong>198.51.100.23</strong> is an RFC&nbsp;5737 documentation-reserved IP, not a real observed host.</div>
+
+<div class="report">
+
+  <aside class="spine">
+    <p class="spine-kicker">Threat Intelligence Report</p>
+    <div class="spine-title-row">
+      <h1>Investigation INV&#8209;2026&#8209;0091</h1>
+      <details class="update-widget">
+        <summary>Update</summary>
+        <div class="update-panel">
+          <p class="panel-lede">Re-running against [Target Entity Name] dispatches only the agents likely to find something new:</p>
+          <ul class="agent-check">
+            <li class="run"><span>Reputation Collector</span><span class="status">Runs</span></li>
+            <li class="run"><span>Infrastructure Collector</span><span class="status">Runs</span></li>
+            <li class="skip"><span>Sandbox Collector</span><span class="status">Skipped &mdash; no new files seen on this target</span></li>
+            <li class="cond"><span>Enrichment Agent</span><span class="status">Runs only if a new term appears</span></li>
+            <li class="run"><span>Deconfliction &amp; Report&#8209;writer</span><span class="status">Always runs</span></li>
+          </ul>
+          <button type="button" class="confirm-update" onclick="this.disabled=true; this.textContent='Update queued'; var n=document.createElement('p'); n.className='panel-note'; n.textContent='You will get a notification when the refreshed report is ready.'; this.insertAdjacentElement('afterend', n);">Start update</button>
+        </div>
+      </details>
+    </div>
+    <p class="spine-target">[Target Entity Name]</p>
+
+    <div class="verdict-block">
+      <p class="verdict-label">Malicious</p>
+      <div class="conf-track"><div class="conf-fill" style="width:92%"></div></div>
+      <p class="conf-label">Confidence 92 / 100</p>
+    </div>
+
+    <dl class="facts">
+      <div><dt>Indicator Type</dt><dd>IPv4</dd></div>
+      <div><dt>First Seen</dt><dd>2026&#8209;08&#8209;30</dd></div>
+      <div><dt>Last Seen</dt><dd>2026&#8209;09&#8209;24</dd></div>
+      <div><dt>ASN</dt><dd>AS64511</dd></div>
+      <div><dt>Report Version</dt><dd>v2 (updated)</dd></div>
+      <div><dt>Generated</dt><dd>09&#8209;24 09:47 UTC</dd></div>
+    </dl>
+
+    <p class="spine-kicker" style="margin-bottom:.5rem;">Related artifacts</p>
+    <div class="artifact-chips">
+      <a href="#dynamic-analysis-loader">Windows Loader ↳ Hash</a>
+      <a href="#dynamic-analysis-elf">Linux Backdoor ↳ Hash</a>
+    </div>
+
+    <nav>
+      <p class="nav-label">Contents</p>
+      <ol>
+        <li><a href="#exec-summary">Executive Summary</a></li>
+        <li><a href="#flagged">Flagged for Review</a></li>
+        <li><a href="#reputation">Reputation &amp; Abuse Signals</a></li>
+        <li><a href="#dynamic-analysis">Dynamic Analysis Findings</a></li>
+        <li><a href="#infrastructure">Infrastructure Exposure</a></li>
+        <li><a href="#deconfliction">Deconfliction Detail</a></li>
+        <li><a href="#synthesis">AI&#8209;Inferred Synthesis</a></li>
+        <li><a href="#sources">Sources</a></li>
+      </ol>
+    </nav>
+
+    <p class="spine-foot">Requested by SOC Tier 2 — J. Alvarez. First generated 2026&#8209;09&#8209;18 14:02 UTC.</p>
+  </aside>
+
+  <main class="doc">
+
+    <div class="doc-title">
+      <p class="report-name">CTI Orchestrator — Report Output</p>
+      <h1>A cross-platform command-and-control node serving both a Windows loader and a Linux kernel-mode backdoor</h1>
+    </div>
+
+    <section class="sec" id="exec-summary">
+      <div class="sec-head"><span class="sec-num">1</span><h2>Executive summary</h2></div>
+
+      <div class="update-note">
+        <strong>Updated since the last report (2026&#8209;09&#8209;18 14:02 UTC)</strong>
+        VirusTotal detections for the Windows loader rose from 3/89 to 41/89. AbuseIPDB's abuse confidence score rose from 46 to 88. Port 445/tcp is now open, where it was previously closed. The Linux ELF backdoor and its kernel rootkit module are new findings in this version.
+      </div>
+
+      <p class="lede">[Target Entity Name] is an active command-and-control node serving distinct payloads to Windows and Linux targets. AbuseIPDB records 214 abuse reports in the past 90 days, most recently for SSH brute-forcing and port scanning<a class="cite official" href="https://www.abuseipdb.com/check/198.51.100.23" target="_blank" rel="noopener" title="AbuseIPDB — retrieved 2026-09-24 09:41 UTC">1</a>, and VirusTotal's community score for the address is &minus;58, with 41 of 89 security vendors flagging an associated Windows loader as malicious<a class="cite official" href="https://www.virustotal.com/gui/ip-address/198.51.100.23" target="_blank" rel="noopener" title="VirusTotal — retrieved 2026-09-24 09:42 UTC">2</a>. Sandbox analysis of that loader shows in-memory process injection into a legitimate host process and the installation of a kernel-mode rootkit component by way of a signed, vulnerable third-party driver<a class="cite official" href="https://app.any.run/tasks/7f4c2a91-3e58-4b0d-9c2a-1e6f8a3d5b7c/" target="_blank" rel="noopener" title="Any.Run — retrieved 2026-09-24 09:43 UTC">3</a>. A second, Linux ELF payload observed communicating with the same address installs a kernel module that hides its own process from standard system tools. Shodan shows the host currently exposing SSH, SMB, and RDP services alongside a self-signed certificate issued three days before this report<a class="cite official" href="https://www.shodan.io/host/198.51.100.23" target="_blank" rel="noopener" title="Shodan — retrieved 2026-09-24 09:46 UTC">4</a>.</p>
+
+      <p>Full evidence for each claim, with a direct link to its source, is laid out section by section below.</p>
+    </section>
+
+    <section class="sec" id="flagged">
+      <div class="sec-head"><span class="sec-num">2</span><h2>Flagged for review</h2></div>
+      <div class="flag-box">
+        <p><strong>Sources disagree on scope.</strong> AbuseIPDB's community reports describe SSH brute-forcing against hosts in Southeast Asia, dated between March and June 2026<a class="cite official" href="https://www.abuseipdb.com/check/198.51.100.23" target="_blank" rel="noopener" title="AbuseIPDB — retrieved 2026-09-24 09:41 UTC">1</a>. Neither VirusTotal's file-relationship graph nor the sandbox traces in this report show any connection to that activity.</p>
+        <p>This may indicate shared or reallocated hosting rather than a single actor running one dedicated campaign — worth checking the ASN's allocation history before treating the brute-force reports and the loader/backdoor infrastructure as the same operation.</p>
+      </div>
+    </section>
+
+    <section class="sec" id="reputation">
+      <div class="sec-head"><span class="sec-num">3</span><h2>Reputation &amp; Abuse Signals</h2></div>
+
+      <div class="card">
+        <div class="card-head">
+          <h4>AbuseIPDB</h4>
+          <span class="tag malicious">88 / 100</span>
+        </div>
+        <dl class="kv">
+          <dt>Abuse Reports (90d)</dt><dd>214 <a class="cite official" href="https://www.abuseipdb.com/check/198.51.100.23" target="_blank" rel="noopener" title="AbuseIPDB — retrieved 2026-09-24 09:41 UTC">1</a></dd>
+          <dt>Categories</dt><dd>SSH brute-force, port scan, web app attack</dd>
+          <dt>Countries Targeted</dt><dd>Vietnam, Philippines, Brazil, Germany</dd>
+          <dt>ISP</dt><dd>Exampla Hosting Ltd.</dd>
+          <dt>WHOIS Registrant</dt><dd>Redacted (privacy proxy), registered 2024-11-02</dd>
+        </dl>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h4>VirusTotal</h4>
+          <span class="tag malicious">Community score &minus;58</span>
+        </div>
+        <dl class="kv">
+          <dt>Address page</dt><dd><a class="cite official" href="https://www.virustotal.com/gui/ip-address/198.51.100.23" target="_blank" rel="noopener" title="VirusTotal — retrieved 2026-09-24 09:42 UTC">2</a> last analyzed 2026&#8209;09&#8209;24</dd>
+          <dt>Related file (loader)</dt><dd>41 / 89 vendors flag as malicious <a class="cite official" href="https://www.virustotal.com/gui/file/c1a9e3f25b7d04689f2e1c3a6b8d4f70a2c9e5b13d7f04689c2a6e1d4b8f3706" target="_blank" rel="noopener" title="VirusTotal — retrieved 2026-09-24 09:42 UTC">5</a></dd>
+          <dt>Community comments</dt><dd>3, noting resemblance to prior Emotet loader campaigns</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section class="sec" id="dynamic-analysis">
+      <div class="sec-head"><span class="sec-num">4</span><h2>Dynamic analysis findings</h2></div>
+      <p class="muted">Each finding below pairs the sandbox's raw observation with a plain-language reference annotation. Filled citation numbers link to official vendor or standards documentation; outlined numbers link to community-maintained, unofficial references — weigh them accordingly.</p>
+
+      <h3 id="dynamic-analysis-loader">Windows loader</h3>
+      <div class="hash-line">sha256 c1a9e3f2 5b7d0468 9f2e1c3a 6b8d4f70 a2c9e5b1 3d7f0468 9c2a6e1d 4b8f3706</div>
+      <p>Detonated in Any.Run<a class="cite official" href="https://app.any.run/tasks/7f4c2a91-3e58-4b0d-9c2a-1e6f8a3d5b7c/" target="_blank" rel="noopener" title="Any.Run — retrieved 2026-09-24 09:43 UTC">3</a>. Behavior and family attribution match publicly documented Emotet loader campaigns<a class="cite official" href="https://malpedia.caad.fkie.fraunhofer.de/details/win.emotet" target="_blank" rel="noopener" title="Malpedia — retrieved 2026-09-24 09:44 UTC">6</a>.</p>
+      <ul class="finding-list">
+        <li>Allocates memory in <code class="tok">explorer.exe</code> via <code class="tok">VirtualAllocEx</code><a class="cite official" href="https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualallocex" target="_blank" rel="noopener" title="Microsoft Learn — retrieved 2026-09-24 09:44 UTC">7</a>, writes shellcode with <code class="tok">WriteProcessMemory</code><a class="cite official" href="https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-writeprocessmemory" target="_blank" rel="noopener" title="Microsoft Learn — retrieved 2026-09-24 09:44 UTC">8</a>, and starts execution with <code class="tok">CreateRemoteThread</code><a class="cite official" href="https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createremotethread" target="_blank" rel="noopener" title="Microsoft Learn — retrieved 2026-09-24 09:45 UTC">9</a> — a documented, if frequently abused, process-injection sequence.</li>
+        <li>Separately calls <code class="tok">NtMapViewOfSection</code><a class="cite community" href="https://ntdoc.m417z.com/ntmapviewofsection" target="_blank" rel="noopener" title="ntdoc.m417z.com — community reference, retrieved 2026-09-24 09:45 UTC">10</a> directly against ntdll rather than going through the documented Win32 path — a native-API call Microsoft does not publish, and a common evasion technique for tooling that only watches Win32 calls.</li>
+        <li>Drops and loads <code class="tok">RTCore64.sys</code>, a legitimately signed MSI Afterburner driver with a publicly known kernel read/write vulnerability<a class="cite official" href="https://nvd.nist.gov/vuln/detail/CVE-2019-16098" target="_blank" rel="noopener" title="NVD — retrieved 2026-09-24 09:46 UTC">11</a>, then uses it to load an unsigned kernel module.</li>
+        <li>That kernel module unlinks the loader's own process by rewriting the <code class="tok">ActiveProcessLinks</code> pointer inside the <code class="tok">_EPROCESS</code> structure<a class="cite community" href="https://www.vergiliusproject.com/kernels/x64/Windows%2011/23H2%20(2022%20Update)/_EPROCESS" target="_blank" rel="noopener" title="Vergilius Project — community reference for Windows 11 23H2 (build 22631), retrieved 2026-09-24 09:46 UTC">12</a> — a reverse-engineered, build-specific structure layout, not something Microsoft documents publicly.</li>
+      </ul>
+
+      <h3 id="dynamic-analysis-elf">Linux ELF backdoor</h3>
+      <div class="hash-line">sha256 7e2b9d4a 1f6c8305 b3a7e1d9 4c6f2a80 e9d3b5c1 7a0f4e28 6d1c9b3a 5e8f0472</div>
+      <p>Detonated in HybridAnalysis<a class="cite official" href="https://www.hybrid-analysis.com/sample/7e2b9d4a1f6c8305b3a7e1d94c6f2a80e9d3b5c17a0f4e286d1c9b3a5e8f0472" target="_blank" rel="noopener" title="HybridAnalysis — retrieved 2026-09-24 09:47 UTC">13</a> after being retrieved from the same address on port 8080/tcp.</p>
+      <ul class="finding-list">
+        <li>Beacons outbound to 198.51.100.23 on port 4444/tcp on a five-minute interval.</li>
+        <li>Drops <code class="tok">diamorphine.ko</code> into <code class="tok">/lib/modules/</code> and loads it to hook the syscall table, hiding its own process from <code class="tok">ps</code>, <code class="tok">ls</code>, and <code class="tok">/proc</code> listings. <span class="no-ref">no reference found</span> — this is not a standard distribution kernel module; the name matches a publicly known open-source rootkit proof-of-concept rather than anything with official documentation, which is itself informative.</li>
+        <li>Links against <code class="tok">libpcap.so.1.10.3</code><a class="cite official" href="https://www.tcpdump.org/manpages/pcap.3pcap.html" target="_blank" rel="noopener" title="tcpdump.org — retrieved 2026-09-24 09:47 UTC">14</a> to sniff unencrypted credentials from the local network segment — a legitimate, widely-used packet-capture library; its presence here is context for how the credential theft works, not evidence on its own.</li>
+      </ul>
+    </section>
+
+    <section class="sec" id="infrastructure">
+      <div class="sec-head"><span class="sec-num">5</span><h2>Infrastructure exposure</h2></div>
+      <div class="card">
+        <div class="card-head">
+          <h4>Shodan / Censys</h4>
+          <span class="tag context">Exposure snapshot</span>
+        </div>
+        <dl class="kv">
+          <dt>Open ports</dt><dd>22/tcp (OpenSSH 8.9p1), 445/tcp (SMB), 3389/tcp (RDP), 4444/tcp (unidentified)</dd>
+          <dt>TLS certificate</dt><dd>Self-signed, CN=DESKTOP-C2SRV, issued 2026-09-21</dd>
+          <dt>Shodan</dt><dd><a class="cite official" href="https://www.shodan.io/host/198.51.100.23" target="_blank" rel="noopener" title="Shodan — retrieved 2026-09-24 09:46 UTC">4</a> last scanned 2026&#8209;09&#8209;24</dd>
+          <dt>Censys</dt><dd><a class="cite official" href="https://search.censys.io/hosts/198.51.100.23" target="_blank" rel="noopener" title="Censys — retrieved 2026-09-24 09:47 UTC">15</a> corroborates open ports and certificate</dd>
+        </dl>
+      </div>
+      <p class="muted">Port 4444/tcp is unidentified by both scanners' service banners; it correlates with the Linux ELF backdoor's beacon port observed in sandbox, which is the strongest link tying the infrastructure scan to the dynamic-analysis findings above.</p>
+    </section>
+
+    <section class="sec" id="deconfliction">
+      <div class="sec-head"><span class="sec-num">6</span><h2>Deconfliction detail</h2></div>
+      <p class="muted">How each source's claim was weighed into the consensus. Amber cells mark points of disagreement; sage cells mark agreement.</p>
+      <table class="deconf">
+        <thead>
+          <tr><th>Claim</th><th>AbuseIPDB<sup>1</sup></th><th>VirusTotal<sup>2</sup></th><th>Sandbox</th><th>Consensus</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Overall verdict</td>
+            <td>Malicious (88/100)</td>
+            <td>Malicious (41/89)</td>
+            <td>Malicious — confirmed loader &amp; backdoor</td>
+            <td class="consensus-agree">Malicious, 92/100</td>
+          </tr>
+          <tr>
+            <td>SSH brute-force activity</td>
+            <td>Reported (community, Mar&ndash;Jun 2026)</td>
+            <td>No detection</td>
+            <td>Not observed</td>
+            <td class="consensus-conflict">Unconfirmed &mdash; flagged for review</td>
+          </tr>
+          <tr>
+            <td>Command-and-control beaconing</td>
+            <td>&mdash;</td>
+            <td>Related-object graph</td>
+            <td>Confirmed, both payloads</td>
+            <td class="consensus-agree">Confirmed</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="sec" id="synthesis">
+      <div class="sec-head"><span class="sec-num">7</span><h2>AI&#8209;inferred synthesis</h2></div>
+      <div class="synth-box">
+        <span class="synth-tag">Not sourced to a single citation &mdash; analytical hypothesis</span>
+        <p>The simultaneous presence of a Windows BYOVD rootkit loader and a Linux kernel-module rootkit calling back to the same address, on infrastructure that also carries unrelated SSH brute-force abuse reports, suggests this may be shared or resold hosting reused by more than one actor rather than infrastructure built for a single campaign. This pattern is drawn from the sections above, not from any one vendor's finding, and should be weighed as a hypothesis rather than treated as fact.</p>
+      </div>
+    </section>
+
+    <section class="sec" id="sources">
+      <div class="sec-head"><span class="sec-num">8</span><h2>Sources</h2></div>
+      <div class="legend">
+        <span><span class="swatch official">1</span> Official vendor / standards documentation</span>
+        <span><span class="swatch community">2</span> Community-maintained, unofficial reference</span>
+      </div>
+
+      <div class="sources-group">
+        <h3>Reputation &amp; abuse</h3>
+        <ol class="source-list">
+          <li><span class="src-num">1</span><div><span class="src-name">AbuseIPDB</span><span class="src-tag">official</span><a class="src-url" href="https://www.abuseipdb.com/check/198.51.100.23" target="_blank" rel="noopener">https://www.abuseipdb.com/check/198.51.100.23</a><span class="src-meta">Retrieved 2026-09-24 09:41 UTC</span></div></li>
+          <li><span class="src-num">2</span><div><span class="src-name">VirusTotal — IP address</span><span class="src-tag">official</span><a class="src-url" href="https://www.virustotal.com/gui/ip-address/198.51.100.23" target="_blank" rel="noopener">https://www.virustotal.com/gui/ip-address/198.51.100.23</a><span class="src-meta">Retrieved 2026-09-24 09:42 UTC</span></div></li>
+          <li><span class="src-num">5</span><div><span class="src-name">VirusTotal — file</span><span class="src-tag">official</span><a class="src-url" href="https://www.virustotal.com/gui/file/c1a9e3f25b7d04689f2e1c3a6b8d4f70a2c9e5b13d7f04689c2a6e1d4b8f3706" target="_blank" rel="noopener">https://www.virustotal.com/gui/file/c1a9e3f2…8f3706</a><span class="src-meta">Retrieved 2026-09-24 09:42 UTC</span></div></li>
+        </ol>
+      </div>
+
+      <div class="sources-group">
+        <h3>Dynamic analysis &mdash; Windows loader</h3>
+        <ol class="source-list">
+          <li><span class="src-num">3</span><div><span class="src-name">Any.Run sandbox report</span><span class="src-tag">official</span><a class="src-url" href="https://app.any.run/tasks/7f4c2a91-3e58-4b0d-9c2a-1e6f8a3d5b7c/" target="_blank" rel="noopener">https://app.any.run/tasks/7f4c2a91-…</a><span class="src-meta">Retrieved 2026-09-24 09:43 UTC</span></div></li>
+          <li><span class="src-num">6</span><div><span class="src-name">Malpedia &mdash; win.emotet</span><span class="src-tag">official</span><a class="src-url" href="https://malpedia.caad.fkie.fraunhofer.de/details/win.emotet" target="_blank" rel="noopener">https://malpedia.caad.fkie.fraunhofer.de/details/win.emotet</a><span class="src-meta">Retrieved 2026-09-24 09:44 UTC</span></div></li>
+          <li><span class="src-num">7</span><div><span class="src-name">Microsoft Learn &mdash; VirtualAllocEx</span><span class="src-tag">official</span><a class="src-url" href="https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualallocex" target="_blank" rel="noopener">https://learn.microsoft.com/…/nf-memoryapi-virtualallocex</a><span class="src-meta">Retrieved 2026-09-24 09:44 UTC</span></div></li>
+          <li><span class="src-num">8</span><div><span class="src-name">Microsoft Learn &mdash; WriteProcessMemory</span><span class="src-tag">official</span><a class="src-url" href="https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-writeprocessmemory" target="_blank" rel="noopener">https://learn.microsoft.com/…/nf-memoryapi-writeprocessmemory</a><span class="src-meta">Retrieved 2026-09-24 09:44 UTC</span></div></li>
+          <li><span class="src-num">9</span><div><span class="src-name">Microsoft Learn &mdash; CreateRemoteThread</span><span class="src-tag">official</span><a class="src-url" href="https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createremotethread" target="_blank" rel="noopener">https://learn.microsoft.com/…/nf-processthreadsapi-createremotethread</a><span class="src-meta">Retrieved 2026-09-24 09:45 UTC</span></div></li>
+          <li><span class="src-num">10</span><div><span class="src-name">ntdoc.m417z.com &mdash; NtMapViewOfSection</span><span class="src-tag">community, unofficial</span><a class="src-url" href="https://ntdoc.m417z.com/ntmapviewofsection" target="_blank" rel="noopener">https://ntdoc.m417z.com/ntmapviewofsection</a><span class="src-meta">Retrieved 2026-09-24 09:45 UTC</span></div></li>
+          <li><span class="src-num">11</span><div><span class="src-name">NVD &mdash; CVE-2019-16098</span><span class="src-tag">official</span><a class="src-url" href="https://nvd.nist.gov/vuln/detail/CVE-2019-16098" target="_blank" rel="noopener">https://nvd.nist.gov/vuln/detail/CVE-2019-16098</a><span class="src-meta">Retrieved 2026-09-24 09:46 UTC</span></div></li>
+          <li><span class="src-num">12</span><div><span class="src-name">Vergilius Project &mdash; _EPROCESS (Windows 11 23H2)</span><span class="src-tag">community, unofficial, build-specific</span><a class="src-url" href="https://www.vergiliusproject.com/kernels/x64/Windows%2011/23H2%20(2022%20Update)/_EPROCESS" target="_blank" rel="noopener">https://www.vergiliusproject.com/kernels/x64/Windows 11/23H2…/_EPROCESS</a><span class="src-meta">Retrieved 2026-09-24 09:46 UTC &middot; applies to build 22631 only</span></div></li>
+        </ol>
+      </div>
+
+      <div class="sources-group">
+        <h3>Dynamic analysis &mdash; Linux backdoor</h3>
+        <ol class="source-list">
+          <li><span class="src-num">13</span><div><span class="src-name">HybridAnalysis sandbox report</span><span class="src-tag">official</span><a class="src-url" href="https://www.hybrid-analysis.com/sample/7e2b9d4a1f6c8305b3a7e1d94c6f2a80e9d3b5c17a0f4e286d1c9b3a5e8f0472" target="_blank" rel="noopener">https://www.hybrid-analysis.com/sample/7e2b9d4a…</a><span class="src-meta">Retrieved 2026-09-24 09:47 UTC</span></div></li>
+          <li><span class="src-num">14</span><div><span class="src-name">tcpdump.org &mdash; pcap(3PCAP) man page</span><span class="src-tag">official</span><a class="src-url" href="https://www.tcpdump.org/manpages/pcap.3pcap.html" target="_blank" rel="noopener">https://www.tcpdump.org/manpages/pcap.3pcap.html</a><span class="src-meta">Retrieved 2026-09-24 09:47 UTC</span></div></li>
+        </ol>
+      </div>
+
+      <div class="sources-group">
+        <h3>Infrastructure exposure</h3>
+        <ol class="source-list">
+          <li><span class="src-num">4</span><div><span class="src-name">Shodan</span><span class="src-tag">official</span><a class="src-url" href="https://www.shodan.io/host/198.51.100.23" target="_blank" rel="noopener">https://www.shodan.io/host/198.51.100.23</a><span class="src-meta">Retrieved 2026-09-24 09:46 UTC</span></div></li>
+          <li><span class="src-num">15</span><div><span class="src-name">Censys</span><span class="src-tag">official</span><a class="src-url" href="https://search.censys.io/hosts/198.51.100.23" target="_blank" rel="noopener">https://search.censys.io/hosts/198.51.100.23</a><span class="src-meta">Retrieved 2026-09-24 09:47 UTC</span></div></li>
+        </ol>
+      </div>
+    </section>
+
+    <footer class="provenance">
+      Generated by the CTI Orchestrator (prototype build) &mdash; Reputation collector, Sandbox collector, Infrastructure collector, Enrichment agent, Deconfliction agent, Report&#8209;writer agent. Data retrieved 2026&#8209;09&#8209;24 between 09:41 and 09:47 UTC. This report synthesizes third-party data; verify every claim against its linked source before taking action. Sample data generated for design preview purposes only &mdash; no real host, file, or organization is implicated.
+    </footer>
+
+  </main>
+</div>
+
+</body>
+</html>
