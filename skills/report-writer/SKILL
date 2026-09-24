@@ -1,0 +1,56 @@
+---
+name: report-writer
+description: "Use this skill when rendering CAARS pipeline output (deconflicted indicator records + enrichment annotations) into the final HTML threat intelligence report, or when updating an existing report after a re-run. Triggers include: 'write the report', 'generate the HTML report', 'render findings for [indicator]', 'update the report for [indicator]', or any request to produce the analyst-facing deliverable for a CAARS investigation. Do NOT use this for collecting source data (see cti-collector-builder), resolving disagreements between sources (see cti-deconfliction), or looking up reference terms (see cti-enrichment) — this skill only consumes their already-normalized output and renders it."
+---
+
+# CAARS report-writer
+
+Renders the report-writer agent's role from the CAARS architecture: take deconflicted indicator records + enrichment annotations (and, on a re-run, the prior run's stored records) and produce one self-contained HTML file where every sourced claim links to its `evidence_url`.
+
+Read `../../CLAUDE.md` (project root) first if it hasn't been read yet this session — it has the full data model and the human-in-the-loop rules this skill must not violate.
+
+## Template
+
+`../../CTI_Report_Prototype.html` is the canonical visual/structural reference. Copy its `<style>` block and DOM structure wholesale for a new report — do not redesign it. It uses sample/fictional data (target IP is an RFC 5737 documentation-reserved address) purely to demonstrate structure; a real report replaces that content but keeps the CSS classes and layout.
+
+## Inputs this skill expects
+
+- A list of **deconflicted findings**: consensus verdict, confidence score (0–100), and per-claim consensus/conflict status, as produced by `cti-deconfliction`.
+- A list of **enrichment annotations** (or explicit "no reference found" markers), as produced by `cti-enrichment`.
+- The raw **indicator records** underneath those findings, each with its `evidence_url` and `retrieved_at` — needed because every sentence in the report must trace back to one of these.
+- On a re-run: the **prior run's stored record set** for the same indicator, for diffing.
+
+If any of these inputs are missing, ask for them rather than inventing findings — this skill renders what it's given, it does not do collection, deconfliction, or enrichment itself.
+
+## Build steps
+
+1. **Spine (`<aside class="spine">`).** Investigation ID, target indicator, verdict block (`.verdict-block` — label + confidence bar + score), key facts (`dl.facts`: indicator type, first/last seen, ASN if applicable, report version, generation timestamp), related-artifact chips if the investigation has sub-indicators (e.g. a hash pulled from sandbox), contents nav matching the section IDs below, and a footer line with who requested it and when first generated.
+2. **Executive Summary (`#exec-summary`).** One dense paragraph, lede-styled, that states the consensus verdict and the two or three strongest pieces of evidence, each with an inline citation. If this is a re-run with material changes, prepend an `.update-note` box stating concretely what changed and versus what timestamp (e.g. "VirusTotal detections rose from 3/89 to 41/89"). Do not add an update note if nothing material changed since the last run.
+3. **Flagged for Review (`#flagged`).** One `.flag-box` per unresolved conflict from the deconfliction step. State what disagrees, cite both sides, and suggest — don't assert — what might explain it. Omit this section entirely if deconfliction reported zero conflicts; don't leave an empty box.
+4. **Per-source-family evidence sections** (`#reputation`, `#dynamic-analysis`, `#infrastructure`, etc. — name/order these to match whichever collector families actually ran). Use `.card` blocks for structured lookups (`dl.kv`) and `ul.finding-list` for sandbox/behavioral findings. Every `<li>` or `<p>` that states a fact gets a `.cite` link (see citation rules below).
+5. **Deconfliction Detail (`#deconfliction`).** `table.deconf`: one row per claim that was actually contested or notable, columns per source plus a Consensus column. `.consensus-conflict` (amber) for disagreement, `.consensus-agree` (sage) for agreement. Don't pad this table with claims where there was nothing to reconcile.
+6. **AI-Inferred Synthesis (`#synthesis`).** `.synth-box`, tagged with `.synth-tag` reading something like "Not sourced to a single citation — analytical hypothesis." This is the *only* section allowed to contain a claim without an `evidence_url`. Keep it explicitly hedged ("suggests," "may indicate") — this section is reasoning across sections, not a new fact.
+7. **Sources (`#sources`).** Grouped by the section that used them, each entry numbered to match its inline citation, tagged `official` or `community, unofficial` (and for Vergilius, the OS build), with the retrieval timestamp. Include the legend (`.legend`) explaining the two citation styles.
+8. **Footer (`.provenance`).** List which agents actually ran, the retrieval time window, and the standard "verify every claim against its linked source" disclaimer from the prototype. Keep this — it's a guardrail, not boilerplate.
+
+## Citation rules (non-negotiable — see CLAUDE.md "Human-in-the-loop guardrails")
+
+- **No `evidence_url`, no claim in the report body.** Move it to Synthesis or drop it.
+- `class="cite official"` — vendor/standards documentation (AbuseIPDB, VirusTotal, Shodan, Censys, Any.Run/JoeSandbox/HybridAnalysis, Malpedia, Microsoft Learn, NVD, tcpdump.org man pages, etc.).
+- `class="cite community"` — reverse-engineered/community references (Vergilius Project, ntdoc.m417z.com, and similar). These must read as less authoritative than `official` citations in tone, not just styling — don't phrase a community-sourced claim with the same certainty as a vendor-confirmed one.
+- `class="no-ref"` — a term the enrichment agent explicitly could not resolve. State that plainly inline (see the prototype's `diamorphine.ko` example) rather than omitting the term.
+- Reference/enrichment citations explain a term; they never get phrased as if they support a verdict. ("X is a documented Win32 API used for legitimate purposes" is correct; implying Microsoft's docs "flagged" something is not.)
+- Every citation `<a>` needs `title="<Source> — retrieved <UTC timestamp>"` — this is what lets an analyst sanity-check recency at a glance without leaving the page.
+
+## Update / re-run handling
+
+- Diff the new indicator records against the prior run's stored records (not the prior rendered HTML — always diff structured data).
+- Only surface changes that are material to the verdict or a specific claim (detection ratio shifts, new open ports, new sandbox findings, confidence score movement). Cosmetic timestamp-only changes don't need a callout.
+- Bump `Report Version` in the spine facts (e.g. `v1` → `v2 (updated)`).
+- New sub-findings from a re-run (e.g. a newly-observed second payload) get their own subsection, not folded silently into the existing one — the prototype's Windows-loader/Linux-backdoor split is the pattern to follow when an investigation grows a second artifact.
+
+## Verification before handing off
+
+- Grep the rendered HTML for every `<p>` and `<li>` inside `.sec` (excluding `#synthesis`) and confirm each either contains a `.cite`/`.no-ref` marker or is a connective/summary sentence that makes no new factual claim.
+- Confirm every `href` in the Sources section is a real URL captured from an actual collector/enrichment call — never fabricate a plausible-looking source URL.
+- Open the file in a browser (or render it) and check the citation legend, verdict color, and confidence bar actually match the data before sharing it with the analyst.
