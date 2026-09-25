@@ -1,0 +1,24 @@
+# Sources for documentation on operating system processes, functions, API calls, etc.
+
+## Linux
+https://elixir.bootlin.com/
+https://man7.org/linux/man-pages
+https://syscalls.mebeim.net
+https://pubs.opengroup.org
+https://attack.mitre.org/matrices/enterprise/linux/
+
+## Microsoft
+https://attack.mitre.org/matrices/enterprise/windows/
+https://www.vergiliusproject.com/
+https://reactos.org/wiki/Welcome_to_the_ReactOS_Development_Wiki
+https://ntdoc.m417z.com
+https://cristeigabriela.github.io/bb-viewer/index.html#/?ds=winsdk&arch=amd64&mode=user
+
+## MacOS (WIP)
+https://attack.mitre.org/matrices/enterprise/macos/
+
+## Android (WIP)
+https://attack.mitre.org/matrices/mobile/android/
+
+## iOS (WIP)
+https://attack.mitre.org/matrices/mobile/ios/
